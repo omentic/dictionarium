@@ -33,49 +33,44 @@ fn lookup(word: &str) -> Option<String> {
     for line in reader.lines() {
         let line = line.expect("Failed to read line");
 
-        if line.len() > word.len() {
-            let diff = line.len() - word.len();
+        // format: file-offset:page-id:page-title
+        let line = line.splitn(3, ":").collect::<Vec<&str>>();
+        assert!(line.len() == 3, "Failed to parse line. Is your index file valid?");
 
-            if line.get(diff..).unwrap_or_default() == word {
-                let line = line.splitn(3, ":").collect::<Vec<&str>>();
+        let offset = line.get(0).unwrap().parse::<u64>()
+            .expect("Failed to parse offset. Is your index file valid?");
+        let id = line.get(1).unwrap().parse::<u64>()
+            .expect("Failed to parse id. Is your index file valid?");
+        let title = *line.get(2).unwrap(); // this dereference now makes sense
 
-                // format: file-offset:page-id:page-title
-                assert!(line.len() == 3);
-                let offset = line.get(0).unwrap().parse::<u64>()
-                    .expect("Failed to parse offset. Is your index file valid?");
-                let id = line.get(1).unwrap().parse::<u64>()
-                    .expect("Failed to parse id. Is your index file valid?");
-                let title = *line.get(2).unwrap(); // this dereference now makes sense
-                assert!(word == title);
+        if title == word {
+            let file = File::open(dictionary_path)
+                .expect("Failed to open dictionary file");
+            let mut reader = BufReader::new(file);
 
-                let file = File::open(dictionary_path)
-                    .expect("Failed to open dictionary file");
-                let mut reader = BufReader::new(file);
+            // note: our chunk contains multiple pages
+            let offset = reader.seek(SeekFrom::Start(offset))
+                .expect("Bad offset. Is your index file valid?");
+            let reader = BufReader::new(BzDecoder::new(reader));
 
-                // note: our chunk contains multiple pages
-                let offset = reader.seek(SeekFrom::Start(offset))
-                    .expect("Bad offset. Is your index file valid?");
-                let reader = BufReader::new(BzDecoder::new(reader));
-
-                let mut buffer = String::new();
-                let mut page = false;
-                for line in reader.lines() {
-                    let line = line.unwrap();
-                    if line == format!("    <title>{}</title>", title) {
-                        buffer.push_str("  <page>");
-                        buffer.push_str("\n");
-                        page = true;
-                    }
-                    if page {
-                        buffer.push_str(&line);
-                        buffer.push_str("\n");
-                        if line == "  </page>" {
-                            break;
-                        }
+            let mut buffer = String::new();
+            let mut page = false;
+            for line in reader.lines() {
+                let line = line.unwrap();
+                if line == format!("    <title>{}</title>", title) {
+                    buffer.push_str("  <page>");
+                    buffer.push_str("\n");
+                    page = true;
+                }
+                if page {
+                    buffer.push_str(&line);
+                    buffer.push_str("\n");
+                    if line == "  </page>" {
+                        break;
                     }
                 }
-                return Some(buffer);
             }
+            return Some(buffer);
         }
     }
     return None;
