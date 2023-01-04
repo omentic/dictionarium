@@ -1,10 +1,12 @@
 #![allow(non_upper_case_globals)]
 #![allow(unused_variables)]
+#![feature(let_chains)]
 
 use std::io::*;
 use std::fs::File;
 // note that bufread::MultiBzDecoder is _distinct_ from read::MultiBzDecoder
 use bzip2::bufread::*;
+use parse_wiki_text::*;
 
 // https://github.com/rust-lang/rfcs/issues/1349
 const version: &str = env!("CARGO_PKG_VERSION");
@@ -86,8 +88,97 @@ fn correct(word: &str) -> Option<&str> {
 // but it's fine because we're working with MUCH smaller strings lol
 fn display(definition: String) {
     // todo: implement
-    for line in definition.lines() {
-        println!("{}", line);
+    let definition = Configuration::default().parse(&definition);
+    // dbg!(definition.warnings);
+    // dbg!(&definition.nodes);
+
+    // this is really quite terrible code
+    let mut inside_heading = false;
+    let mut english_heading = false;
+    for node in &definition.nodes {
+        if !inside_heading {
+            if let Node::Heading { nodes, level, .. } = node {
+                if *level == 2 {
+                    if let Node::Text { value, .. } = nodes.get(0).unwrap() { // :-(
+                        if *value == "English" {
+                            inside_heading = true;
+                            english_heading = true;
+                            println!("{}", value);
+                        }
+                    }
+                }
+            }
+        } else {
+            if let Node::Heading { nodes, level, .. } = node && *level == 2 {
+                inside_heading = false;
+            } else {
+                display_ii(node);
+            }
+        }
+    }
+    if !english_heading {
+        assert!(inside_heading == false);
+        for node in &definition.nodes {
+            if !inside_heading {
+                if let Node::Heading { nodes, level, .. } = node {
+                    if *level == 2 {
+                        if let Node::Text { value, .. } = nodes.get(0).unwrap() {
+                            inside_heading = true;
+                            println!("{}", value);
+                        }
+                    }
+                }
+            } else {
+                if let Node::Heading { nodes, level, .. } = node && *level == 2 {
+                    inside_heading = false;
+                } else {
+                    display_ii(node);
+                }
+            }
+        }
+    }
+}
+
+// no overloading?? O_O
+fn display_ii(node: &Node) {
+    match node {
+        Node::CharacterEntity { character, .. } => print!("{}", character),
+        Node::Text { value, .. } => print!("{}", value),
+        Node::Link { text, target, .. } => {
+            assert!(text.len() == 1);
+            display_ii(text.get(0).unwrap());
+        },
+
+        Node::Heading { nodes, level, .. } => {
+            assert!(nodes.len() == 1);
+            display_ii(nodes.get(0).unwrap());
+            println!();
+        },
+        Node::HorizontalDivider { end, start } => println!("\n------"),
+        Node::ParagraphBreak { .. } => print!(" "),
+        Node::Template { name, parameters, .. } => {
+            for parameter in parameters.iter().rev() {
+                if let Some(name) = &parameter.name {
+                    // print!("(");
+                    // for value in &parameter.value {
+                    //     display_ii(&value);
+                    // }
+                    // print!(") ");
+                } else {
+                    for value in &parameter.value {
+                        display_ii(&value);
+                    }
+                    break;
+                }
+            }
+        }
+        Node::OrderedList { items, .. } => (),
+        Node::UnorderedList { items, .. } => (),
+
+        Node::Preformatted { nodes, .. } => (),
+        Node::Category { .. } => (),
+        Node::Italic { .. } => (),
+        _ => todo!()
     }
 }
 

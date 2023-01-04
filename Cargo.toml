@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 bzip2 = "0.4.3"
+parse_wiki_text = "0.1.5"
+# peg = "0.8.1"
