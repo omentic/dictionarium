@@ -112,6 +112,7 @@ mod character_entity;
 mod comment;
 mod configuration;
 mod default;
+mod display;
 mod external_link;
 mod heading;
 mod html_entities;
