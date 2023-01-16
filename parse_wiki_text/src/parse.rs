@@ -106,7 +106,13 @@ pub fn parse<'a>(configuration: &crate::Configuration, wiki_text: &'a str) -> cr
                 _ => crate::tag::parse_start_tag(&mut state, configuration),
             },
             Some(b'=') => {
-                crate::template::parse_parameter_name_end(&mut state);
+                // hack
+                if state.get_byte(state.scan_position - 1) == Some(b'>') {
+                    state.scan_position -= 1;
+                    crate::line::parse_end_of_line(&mut state);
+                } else {
+                    crate::template::parse_parameter_name_end(&mut state);
+                }
             }
             Some(b'[') => {
                 if state.get_byte(state.scan_position + 1) == Some(b'[') {
