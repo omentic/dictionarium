@@ -29,6 +29,8 @@ pub fn handle(word: String) {
     }
 }
 
+// WHY can you not implement traits on external types, like what??
+// fortunately we needed to copy-paste the parse_wiki_text library to fix some bugs anyhow
 fn lookup(word: &str) -> Option<String> {
     let file = File::open(index_path).expect("Failed to open index file");
     let reader = BufReader::new(MultiBzDecoder::new(BufReader::new(file)));
@@ -84,102 +86,62 @@ fn correct(word: &str) -> Option<&str> {
     return None;
 }
 
-// now we do inefficient string manipulation
+// now we do somewhat inefficient string manipulation
 // but it's fine because we're working with MUCH smaller strings lol
 fn display(definition: String) {
-    // todo: implement
     let definition = Configuration::default().parse(&definition);
-    // dbg!(definition.warnings);
-    // dbg!(&definition.nodes);
 
     // this is really quite terrible code
-    let mut inside_heading = false;
-    let mut english_heading = false;
-    for node in &definition.nodes {
-        if !inside_heading {
-            if let Node::Heading { nodes, level, .. } = node {
-                if *level == 2 {
-                    if let Node::Text { value, .. } = nodes.get(0).unwrap() { // :-(
-                        if *value == "English" {
-                            inside_heading = true;
-                            english_heading = true;
-                            println!("{}", value);
-                        }
-                    }
-                }
-            }
-        } else {
-            if let Node::Heading { nodes, level, .. } = node && *level == 2 {
-                inside_heading = false;
-            } else {
-                display_ii(node);
-            }
-        }
-    }
-    if !english_heading {
-        assert!(inside_heading == false);
-        for node in &definition.nodes {
-            if !inside_heading {
-                if let Node::Heading { nodes, level, .. } = node {
-                    if *level == 2 {
-                        if let Node::Text { value, .. } = nodes.get(0).unwrap() {
-                            inside_heading = true;
-                            println!("{}", value);
-                        }
-                    }
-                }
-            } else {
-                if let Node::Heading { nodes, level, .. } = node && *level == 2 {
-                    inside_heading = false;
-                } else {
-                    display_ii(node);
-                }
-            }
-        }
+    if !display_ii(&definition, |value| value == "English") {
+        display_ii(&definition, |value| true);
     }
 }
 
-// no overloading?? O_O
-fn display_ii(node: &Node) {
-    match node {
-        Node::CharacterEntity { character, .. } => print!("{}", character),
-        Node::Text { value, .. } => print!("{}", value),
-        Node::Link { text, target, .. } => {
-            assert!(text.len() == 1);
-            display_ii(text.get(0).unwrap());
-        },
+// i really miss static blocks
+const skippable_headers: &[&str; 15] =
+    &["Synonyms", "Antonyms", "Hyponyms", "Anagrams", "Translations",
+    "Pronunciation", "Declension", "Inflection", "Descendants",
+    "Derived terms", "Related terms", "See also", "Further reading",
+    "References", "Alternative forms"];
 
-        Node::Heading { nodes, level, .. } => {
-            assert!(nodes.len() == 1);
-            display_ii(nodes.get(0).unwrap());
-            println!();
-        },
-        Node::HorizontalDivider { end, start } => println!("\n------"),
-        Node::ParagraphBreak { .. } => print!(" "),
-        Node::Template { name, parameters, .. } => {
-            for parameter in parameters.iter().rev() {
-                if let Some(name) = &parameter.name {
-                    // print!("(");
-                    // for value in &parameter.value {
-                    //     display_ii(&value);
-                    // }
-                    // print!(") ");
+// no overloading?? O_O
+// matching on an enum of structs SUCKS
+fn display_ii<F: Fn(&str) -> bool>(definition: &Output, f: F) -> bool {
+    let mut inside_heading = false;
+    let mut correct_language = false;
+    let mut skipping_heading = false;
+    for (i, node) in definition.nodes.iter().enumerate() {
+
+        if let Node::Heading { nodes, level, .. } = node
+        && let Some(Node::Text { value, .. }) = nodes.get(0) {
+            if inside_heading {
+                if *level == 2 {
+                    inside_heading = false;
+                } else if skippable_headers.contains(value) {
+                    skipping_heading = true;
                 } else {
-                    for value in &parameter.value {
-                        display_ii(&value);
+                    if skipping_heading && !skippable_headers.contains(value) {
+                        skipping_heading = false;
                     }
-                    break;
+                    print!("\n{}\n", node);
                 }
+            } else if *level == 2 && f(*value) {
+                inside_heading = true;
+                correct_language = true;
+                print!("{}", node);
+            }
+        } else if inside_heading && !skipping_heading {
+            if let Node::OrderedList { .. } | Node::UnorderedList { .. } | Node::DefinitionList { .. } = node {
+                print!("{}", format!("{}", node).trim());
+            } else {
+                print!("{}", node);
             }
         }
-        Node::OrderedList { items, .. } => (),
-        Node::UnorderedList { items, .. } => (),
-
-        Node::Preformatted { nodes, .. } => (),
-        Node::Category { .. } => (),
-        Node::Italic { .. } => (),
-        _ => todo!()
     }
+    if correct_language {
+        println!();
+    }
+    return correct_language;
 }
 
 pub fn param(word: String) {
