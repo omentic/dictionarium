@@ -13,14 +13,14 @@ const version: &str = env!("CARGO_PKG_VERSION");
 const index_path: &str = env!("index_path");
 const dictionary_path: &str = env!("dictionary_path");
 
-pub fn handle(word: String) {
+pub fn handle(word: String, state: &State) {
     // if lets are kinda clunky
     if let Some(definition) = lookup(&word) {
-        display(definition);
+        display(definition, &state);
     } else if let Some(corrected) = correct(&word) {
         println!("Could not find word {}, continuing with {}...", word, corrected);
         if let Some(definition) = lookup(&corrected) {
-            display(definition);
+            display(definition, &state);
         } else {
             println!("Could not find corrected word {}.", corrected);
         }
@@ -88,11 +88,11 @@ fn correct(word: &str) -> Option<&str> {
 
 // now we do somewhat inefficient string manipulation
 // but it's fine because we're working with MUCH smaller strings lol
-fn display(definition: String) {
+fn display(definition: String, state: &State) {
     let definition = Configuration::default().parse(&definition);
 
     // this is really quite terrible code
-    if !display_ii(&definition, |value| value == "English") {
+    if !display_ii(&definition, |value| value == &state.lang) {
         display_ii(&definition, |value| true);
     }
 }
@@ -144,7 +144,23 @@ fn display_ii<F: Fn(&str) -> bool>(definition: &Output, f: F) -> bool {
     return correct_language;
 }
 
-pub fn param(word: String) {
+// default values on structs please ;_;
+pub struct State {
+    pub full: bool,
+    pub lang: String,
+}
+
+impl State {
+    pub fn new() -> State {
+        return State {
+            full: false,
+            lang: String::from("English"),
+        }
+    }
+}
+
+// mut state: State, yet state: &mut State?? huh??
+pub fn param(word: String, state: &mut State) {
     match word.as_str() { // curious about this
         "--help" => {
             println!("dictionarium {}", version);
@@ -152,7 +168,7 @@ pub fn param(word: String) {
             println!("Usage: dictionarium <word>");
         },
         "--full" => { // set some global variable
-
+            state.full = true;
         },
         _ => {
             println!("Unknown flag \"{}\".", word);
