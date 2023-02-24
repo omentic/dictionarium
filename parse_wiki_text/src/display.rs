@@ -6,6 +6,7 @@
 
 use crate::{Node, Parameter};
 use std::fmt::Error;
+// why is std::other::Result not usable when i import std::fmt::Result?
 
 impl std::fmt::Display for Node<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -31,7 +32,7 @@ impl std::fmt::Display for Node<'_> {
                 match name.get(0) {
                     Some(name) =>
                         if let Node::Text { value, .. } = name {
-                            write!(f, "")
+                            write!(f, "{}", handle_template(*value, parameters)?)
                         } else {
                             Err(Error)
                         },
@@ -73,15 +74,9 @@ impl std::fmt::Display for Node<'_> {
                     write!(f, "{}", node)?;
                 }
                 return Ok(());
-            } ,
-            Node::Image { target, text, .. } => {
-                write!(f, "{}", target)?;
-                for node in text {
-                    write!(f, "{}", node)?;
-                }
-                return Ok(());
             },
-
+            // todo: everything below here
+            Node::Image { target, text, .. } => Ok(()),
             Node::Table { .. } => todo!(),
             Node::Parameter { default, name, .. } => todo!(),
             Node::Redirect { target, .. } => Ok(()),
@@ -95,8 +90,108 @@ impl std::fmt::Display for Node<'_> {
 }
 
 // https://en.wiktionary.org/wiki/Wiktionary:Templates
-fn handle_template(name: &str, parameters: &Vec<Parameter>) -> String {
+// wow, a function entirely composed of edge cases
+fn handle_template(name: &str, parameters: &Vec<Parameter>) -> Result<String, Error> {
+    let mut buffer = String::from("");
     match name {
-        _ => "--template--".to_string(),
+        "m" => {
+            let mut index: usize = 1;
+            for parameter in parameters.iter().skip(1) {
+                if let Some(Node::Text { value, .. }) = parameter.value.get(0) {
+                    if let Some(_) = &parameter.name {
+                        buffer.push_str(&format!(" (\"{value}\")"));
+                    } else if index == 2 {
+                        index += 1;
+                        buffer.push_str(&format!(" (\"{value}\")"));
+                    } else {
+                        index += 1;
+                        buffer.push_str(&format!("{value}"));
+                    }
+                }
+            }
+        },
+        "l" | "bor" | "tlb" | "inh" | "der" | "defdate" | "noncog" => buffer.push_str("-"),
+        "ux" | "lb" | "l-lite" | "root" => buffer.push_str("-"),
+        "a" | "audio" | "non-gloss definition" | "rhymes" | "clipping" | "senseid" => buffer.push_str("-"),
+        "quote-journal" | "quote-song" | "quote-book" => buffer.push_str("-"),
+        x if x.contains("RQ:") => buffer.push_str("-"),
+        x if x.contains("wikidata") => buffer.push_str("-"),
+        "w" | "sense" => buffer.push_str(get(parameters, 0)?),
+        "alternative case form of" => {
+            let form = get(parameters, 1)?;
+            buffer.push_str(&format!("Alternative case form of {form}."));
+        },
+        "syn" => (),
+        "suf" => {
+            for parameter in parameters.iter().skip(1) {
+                let value =
+                    if let Some(Node::Text{ value, .. }) = parameter.value.get(0) {
+                        value
+                    } else {
+                        return Err(Error)
+                    };
+                if let Some(_) = &parameter.name {
+                    buffer.push_str(&format!(" (\"{value}\") + "));
+                } else {
+                    buffer.push_str(&format!("{value}"));
+                }
+            }
+        },
+        "desc" | "desctree" => {
+            let country_code = get(parameters, 0)?;
+
+            let language = get_language(country_code);
+            buffer.push_str(language);
+            buffer.push_str(": ");
+            buffer.push_str(get(parameters, 1)?);
+        },
+        "cog" => {
+            // let language =
+            // let value = get(parameters, 1)?;
+            // if value == "-" {
+
+            // } else {
+
+            // }
+        },
+        "etydate" => {
+            let date = get(parameters, 0)?;
+            buffer.push_str(&format!("First attested in {date}"))
+        },
+        x if x.contains("-adj") || x.contains("-noun") || x.contains("-verb")
+          || x.contains("-prep") || x.contains("-conj") || x.contains("-interj") => { // todo
+            let part = get(parameters, 0).unwrap_or_default();
+            if part != "-" {
+                buffer.push_str(&format!("{part}"));
+            }
+        },
+        x if x.contains("-IPA") => { // todo
+            let ipa = get(parameters, 0)?;
+            buffer.push_str(&format!("IPA: {ipa}"));
+        },
+        "top4" | "bottom" | "head" | "head-lite" | "was wotd" | "wikipedia" => (),
+        _ => buffer.push_str(&format!("\x1b[1m--{name}--\x1b[0m")),
+    };
+    return Ok(buffer);
+}
+
+// really missing uniform function call syntax right about now
+fn get<'a>(parameters: &'a Vec<Parameter>, index: usize) -> Result<&'a str, Error> {
+    if let Some(parameter) = parameters.get(index) {
+        if let Some(Node::Text { value, .. }) = parameter.value.get(0) {
+            return Ok(value);
+        }
     }
+    return Err(Error);
+}
+
+
+fn get_language<'a>(country_code: &'a str) -> &'a str {
+    return "English";
+    // todo: implement necessary parts of isolang
+    // if country_code.len() == 3 {
+    //     return Language::from_639_3(country_code).map_or(country_code, |x| x.to_name());
+    // } else {
+    //     return Language::from_639_1(country_code).map_or(country_code, |x| x.to_name());
+    // }
 }
