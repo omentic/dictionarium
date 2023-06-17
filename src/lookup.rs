@@ -2,6 +2,8 @@ use std::{io::*, fs::File};
 // note that bufread::MultiBzDecoder is _distinct_ from read::MultiBzDecoder
 use bzip2::bufread::*;
 
+use crate::wiktionary_api_path;
+
 // i don't like that there are multiple result types
 // that seems Bad
 // also having to explicitly box dyn Error sucks, fine fuck you it's the rust way
@@ -20,7 +22,7 @@ pub fn lookup(word: &str) -> Lookup {
 fn lookup_local(word: &str, file: File) -> Lookup {
     let reader = BufReader::new(MultiBzDecoder::new(BufReader::new(file)));
     for line in reader.lines() {
-        let line = line.expect("Failed to read line");
+        let line = line?;
 
         // format: file-offset:page-id:page-title
         let line = line.splitn(3, ":").collect::<Vec<&str>>();
@@ -35,8 +37,7 @@ fn lookup_local(word: &str, file: File) -> Lookup {
             let mut reader = BufReader::new(file);
 
             // note: our chunk contains multiple pages
-            let offset = reader.seek(SeekFrom::Start(offset))
-                .expect("Bad offset. Is your index file valid?");
+            let offset = reader.seek(SeekFrom::Start(offset))?;
             let reader = BufReader::new(BzDecoder::new(reader));
 
             let mut buffer = String::new();
@@ -62,7 +63,12 @@ fn lookup_local(word: &str, file: File) -> Lookup {
     return Ok(None);
 }
 
+// holy shit this is compact
 fn lookup_online(word: &str) -> Lookup {
-    todo!();
+    let response = reqwest::blocking::get(wiktionary_api_path.to_owned() + word)?.json::<serde_json::Value>()?;
+    if let Some(serde_json::Value::String(wikitext)) = response.get("parse").and_then(|value| value.get("wikitext")) {
+        return Ok(Some(String::from(wikitext)));
+    } else {
+        return Ok(None);
+    }
 }
-

@@ -11,6 +11,7 @@ pub mod state;
 const version: &str = env!("CARGO_PKG_VERSION");
 const index_path: &str = env!("index_path");
 const dictionary_path: &str = env!("dictionary_path");
+const wiktionary_api_path: &str = "https://en.wiktionary.org/w/api.php?action=parse&format=json&formatversion=2&prop=wikitext&page=";
 
 pub fn handle_word(word: String, state: &state::State) {
     // if lets are kinda clunky
