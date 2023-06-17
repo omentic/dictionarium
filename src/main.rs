@@ -1,9 +1,8 @@
-use std::env;
-use dictionarium;
+use dictionarium::*;
 
 fn main() {
-    let mut state = dictionarium::State::new();
-    let args: Vec<String> = env::args().skip(1).collect();
+    let mut state = state::State::new();
+    let args: Vec<String> = std::env::args().skip(1).collect();
 
     if args.len() == 0 {
         dictionarium::handle_parameter("--help", &mut state);
