@@ -6,8 +6,8 @@
 
 use crate::{Node, Parameter};
 use std::fmt::Error;
-// why is std::other::Result not usable when i import std::fmt::Result?
 
+// why is core::result::Result not usable when i import std::fmt::Result?
 impl std::fmt::Display for Node<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         return match self {
@@ -186,7 +186,7 @@ fn get<'a>(parameters: &'a Vec<Parameter>, index: usize) -> Result<&'a str, Erro
 }
 
 
-fn get_language<'a>(country_code: &'a str) -> &'a str {
+fn get_language(country_code: &str) -> &'static str {
     return "English";
     // todo: implement necessary parts of isolang
     // if country_code.len() == 3 {

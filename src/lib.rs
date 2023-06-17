@@ -2,8 +2,7 @@
 #![allow(unused_variables)]
 #![feature(let_chains)]
 
-use std::io::*;
-use std::fs::File;
+use std::{io::*, fs::File};
 // note that bufread::MultiBzDecoder is _distinct_ from read::MultiBzDecoder
 use bzip2::bufread::*;
 use parse_wiki_text::*;
@@ -13,13 +12,13 @@ const version: &str = env!("CARGO_PKG_VERSION");
 const index_path: &str = env!("index_path");
 const dictionary_path: &str = env!("dictionary_path");
 
-pub fn handle(word: String, state: &State) {
+pub fn handle_word(word: String, state: &State) {
     // if lets are kinda clunky
-    if let Some(definition) = lookup(&word) {
+    if let Some(definition) = lookup(&word).unwrap() {
         display(definition, &state);
     } else if let Some(corrected) = correct(&word) {
         println!("Could not find word {}, continuing with {}...", word, corrected);
-        if let Some(definition) = lookup(&corrected) {
+        if let Some(definition) = lookup(&corrected).unwrap() {
             display(definition, &state);
         } else {
             println!("Could not find corrected word {}.", corrected);
@@ -29,10 +28,22 @@ pub fn handle(word: String, state: &State) {
     }
 }
 
+// i don't like that there are multiple result types
+// that seems Bad
+// also having to explicitly box dyn Error sucks, fine fuck you it's the rust way
+type Lookup = std::result::Result<Option<String>, Box<dyn std::error::Error>>;
+
 // WHY can you not implement traits on external types, like what??
 // fortunately we needed to copy-paste the parse_wiki_text library to fix some bugs anyhow
-fn lookup(word: &str) -> Option<String> {
-    let file = File::open(index_path).expect("Failed to open index file");
+fn lookup(word: &str) -> Lookup {
+    if let Ok(file) = File::open(index_path) {
+        return lookup_local(word, file);
+    } else {
+        return lookup_online(word);
+    }
+}
+
+fn lookup_local(word: &str, file: File) -> Lookup {
     let reader = BufReader::new(MultiBzDecoder::new(BufReader::new(file)));
     for line in reader.lines() {
         let line = line.expect("Failed to read line");
@@ -41,15 +52,12 @@ fn lookup(word: &str) -> Option<String> {
         let line = line.splitn(3, ":").collect::<Vec<&str>>();
         assert!(line.len() == 3, "Failed to parse line. Is your index file valid?");
 
-        let offset = line.get(0).unwrap().parse::<u64>()
-            .expect("Failed to parse offset. Is your index file valid?");
-        let id = line.get(1).unwrap().parse::<u64>()
-            .expect("Failed to parse id. Is your index file valid?");
+        let offset = line.get(0).unwrap().parse::<u64>()?;
+        let id = line.get(1).unwrap().parse::<u64>()?;
         let title = *line.get(2).unwrap(); // this dereference now makes sense
 
         if title == word {
-            let file = File::open(dictionary_path)
-                .expect("Failed to open dictionary file");
+            let file = File::open(dictionary_path)?;
             let mut reader = BufReader::new(file);
 
             // note: our chunk contains multiple pages
@@ -74,16 +82,19 @@ fn lookup(word: &str) -> Option<String> {
                     }
                 }
             }
-            return Some(buffer);
+            return Ok(Some(buffer));
         }
     }
-    return None;
+    return Ok(None);
+}
+
+fn lookup_online(word: &str) -> Lookup {
+    todo!();
 }
 
 // http://norvig.com/spell-correct.html
 fn correct(word: &str) -> Option<&str> {
-    // todo: implement
-    return None;
+    todo!();
 }
 
 // now we do somewhat inefficient string manipulation
@@ -92,8 +103,8 @@ fn display(definition: String, state: &State) {
     let definition = Configuration::default().parse(&definition);
 
     // this is really quite terrible code
-    if !display_ii(&definition, |value| value == &state.lang) {
-        display_ii(&definition, |value| true);
+    if !display_language(&definition, &state.lang) {
+        display_language(&definition, "");
     }
 }
 
@@ -106,7 +117,8 @@ const skippable_headers: &[&str; 15] =
 
 // no overloading?? O_O
 // matching on an enum of structs SUCKS
-fn display_ii<F: Fn(&str) -> bool>(definition: &Output, f: F) -> bool {
+// functions as parameters is too hard
+fn display_language(definition: &Output, lang: &str) -> bool {
     let mut inside_heading = false;
     let mut correct_language = false;
     let mut skipping_heading = false;
@@ -125,7 +137,7 @@ fn display_ii<F: Fn(&str) -> bool>(definition: &Output, f: F) -> bool {
                     }
                     print!("\n{}\n", node);
                 }
-            } else if *level == 2 && f(*value) {
+            } else if *level == 2 && *value == lang {
                 inside_heading = true;
                 correct_language = true;
                 print!("{}", node);
@@ -160,15 +172,11 @@ impl State {
 }
 
 // mut state: State, yet state: &mut State?? huh??
-pub fn param(word: String, state: &mut State) {
-    match word.as_str() { // curious about this
+pub fn handle_parameter(word: &str, state: &mut State) {
+    match word { // todo: extend
         "--help" => {
-            println!("dictionarium {}", version);
-            println!("");
+            println!("dictionarium {}\n", version);
             println!("Usage: dictionarium <word>");
-        },
-        "--full" => { // set some global variable
-            state.full = true;
         },
         _ => {
             println!("Unknown flag \"{}\".", word);
