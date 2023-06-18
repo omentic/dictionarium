@@ -32,7 +32,7 @@ impl std::fmt::Display for Node<'_> {
                 match name.get(0) {
                     Some(name) =>
                         if let Node::Text { value, .. } = name {
-                            write!(f, "{}", handle_template(*value, parameters)?)
+                            write!(f, "{}", expand_template(*value, parameters)?)
                         } else {
                             Err(Error)
                         },
@@ -91,7 +91,7 @@ impl std::fmt::Display for Node<'_> {
 
 // https://en.wiktionary.org/wiki/Wiktionary:Templates
 // wow, a function entirely composed of edge cases
-fn handle_template(name: &str, parameters: &Vec<Parameter>) -> Result<String, Error> {
+fn expand_template(name: &str, parameters: &Vec<Parameter>) -> Result<String, Error> {
     let mut buffer = String::from("");
     match name {
         "m" => {

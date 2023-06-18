@@ -15,21 +15,25 @@ const skippable_headers: &[&str; 15] =
 pub fn display(definition: String, state: &State) {
     let definition = Configuration::default().parse(&definition);
 
-    // impl display on that shit then
-    // definition.display(&state.lang);
-
-    // this is really quite terrible code
-    if !display_language(&definition, &state.lang) {
-        display_language(&definition, "");
-    }
+    display_language(&definition, &state.lang);
 }
 
 // no overloading?? O_O
 // matching on an enum of structs SUCKS
 // functions as parameters is too hard
-pub fn display_language(definition: &Output, lang: &str) -> bool {
+fn display_language(definition: &Output, lang: &str) {
+    let mut has_lang = false;
+    for (i, node) in definition.nodes.iter().enumerate() {
+        if let Node::Heading { nodes, level, .. } = node
+        && let Some(Node::Text { value, .. }) = nodes.get(0) {
+            if *level == 2 && *value == lang {
+                has_lang = true;
+                break;
+            }
+        }
+    }
+
     let mut inside_heading = false;
-    let mut correct_language = false;
     let mut skipping_heading = false;
     for (i, node) in definition.nodes.iter().enumerate() {
 
@@ -46,9 +50,8 @@ pub fn display_language(definition: &Output, lang: &str) -> bool {
                     }
                     print!("\n{}\n", node);
                 }
-            } else if *level == 2 && *value == lang {
+            } else if *level == 2 && (*value == lang || has_lang == false) {
                 inside_heading = true;
-                correct_language = true;
                 print!("{}", node);
             }
         } else if inside_heading && !skipping_heading {
@@ -59,9 +62,6 @@ pub fn display_language(definition: &Output, lang: &str) -> bool {
             }
         }
     }
-    if correct_language {
-        println!();
-    }
-    return correct_language;
+    println!();
 }
 
