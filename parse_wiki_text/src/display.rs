@@ -10,11 +10,11 @@ use std::fmt::Error;
 // why is core::result::Result not usable when i import std::fmt::Result?
 impl std::fmt::Display for Node<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return match self {
+        match self {
             Node::CharacterEntity { character, .. } => write!(f, "{}", character),
             Node::Text { value, .. } => write!(f, "{}", value),
             Node::ParagraphBreak { .. } => write!(f, " "),
-            Node::HorizontalDivider { .. } => write!(f, "\n------\n"),
+            Node::HorizontalDivider { .. } => write!(f, "------"),
 
             Node::Heading { nodes, level, .. } => {
                 match nodes.get(0) {
@@ -42,38 +42,38 @@ impl std::fmt::Display for Node<'_> {
 
             Node::OrderedList { items, .. } => {
                 for (i, item) in items.iter().enumerate() {
-                    write!(f, "\n{}. ", i+1)?;
+                    write!(f, "{}. ", i+1)?;
                     for node in &item.nodes {
                         write!(f, "{}", node)?
                     }
                 }
-                return Ok(());
+                Ok(())
             },
             Node::UnorderedList { items, .. } => {
                 for item in items {
-                    write!(f, "\n• ")?;
+                    write!(f, "• ")?;
                     for node in &item.nodes {
                         write!(f, "{}", node)?
                     }
                 }
-                return Ok(());
+                Ok(())
             },
             Node::DefinitionList { items, .. } => {
                 for item in items {
-                    write!(f, "\n")?;
+                    write!(f, "")?;
                     for node in &item.nodes {
                         write!(f, "{}", node)?
                     }
                     write!(f, " ")?;
                 }
-                return Ok(());
+                Ok(())
             },
 
             Node::ExternalLink { nodes, .. } => {
                 for node in nodes {
                     write!(f, "{}", node)?;
                 }
-                return Ok(());
+                Ok(())
             },
             // todo: everything below here
             Node::Image { target, text, .. } => Ok(()),
